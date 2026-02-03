@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -20,16 +19,13 @@
       --shadow: 0 6px 18px rgba(0,0,0,.06);
     }
     *{ box-sizing:border-box; }
-    body{
-      margin:0;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      color:var(--text);
-      background:var(--bg);
-    }
+    body{ margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:var(--text); background:var(--bg); }
     header{
       padding:16px 14px 10px 14px;
       border-bottom:1px solid var(--border);
-      position:sticky; top:0; background:rgba(255,255,255,.92); backdrop-filter: blur(6px);
+      position:sticky; top:0;
+      background:rgba(255,255,255,.92);
+      backdrop-filter: blur(6px);
       z-index:10;
     }
     header h1{ margin:0; font-size:18px; font-weight:800; }
@@ -163,12 +159,7 @@
       padding:10px;
       margin-top:10px;
     }
-    .errbox h3{
-      margin:0 0 6px 0;
-      font-size:13px;
-      color:var(--err);
-      font-weight:800;
-    }
+    .errbox h3{ margin:0 0 6px 0; font-size:13px; color:var(--err); font-weight:800; }
     .errbox pre{
       margin:0;
       white-space:pre-wrap;
@@ -348,9 +339,9 @@
         </div>
 
         <div class="btnrow">
-          <button class="btn-ghost" id="btnDemo" type="button">Plausibles Beispiel laden</button>
+          <button id="btnDemo" type="button">Plausibles Beispiel laden</button>
           <button class="btn-primary" id="btnCalc" type="button">Plan anzeigen</button>
-          <button class="btn-ghost" id="btnPrint" type="button">Drucken / PDF</button>
+          <button id="btnPrint" type="button">Drucken / PDF</button>
           <button class="btn-danger" id="btnClear" type="button">Reset</button>
         </div>
 
@@ -364,7 +355,7 @@
         </div>
       </section>
 
-      <!-- Typenschild + JSON einklappbar -->
+      <!-- Typenschild + JSON -->
       <section class="card">
         <h2>Datenblöcke (einklappbar)</h2>
 
@@ -438,11 +429,11 @@
               <span class="chev">›</span>
               <span class="sum-title">Klemmenplan / Kopfblatt</span>
             </div>
-            <span class="sum-hint">PDF-Infos</span>
+            <span class="sum-hint">U1/U2…</span>
           </summary>
           <div class="panel">
             <div class="box">
-              <h3>Klemmen / Hinweis</h3>
+              <h3>Klemmen / U1-U2 / V1-V2 / W1-W2</h3>
               <pre id="terminalPlan" class="muted">Wird beim „Plan anzeigen“ erzeugt.</pre>
             </div>
             <div class="box" style="margin-top:10px;">
@@ -614,7 +605,6 @@
       const issues = { errors: [], warns: [] };
       const { z, poles, layers, y } = input;
 
-      // harte Fehler
       if (!Number.isInteger(z) || z < 6) issues.errors.push("Nuten Z ist ungültig (mind. 6).");
       if (!Number.isInteger(poles) || poles < 2) issues.errors.push("Polzahl ist ungültig.");
       if (!Number.isInteger(y) || y < 1) issues.errors.push("Wickelschritt y ist ungültig (mind. 1).");
@@ -623,7 +613,6 @@
 
       if (y >= z) issues.errors.push("y darf nicht >= Z sein.");
 
-      // Vollschritt grob
       const fullPitch = z / poles;
       const diff = Math.abs(y - fullPitch);
       if (y > Math.floor(z/2)) issues.warns.push("y ist größer als Z/2 (ungewöhnlich).");
@@ -632,40 +621,25 @@
       if (layers === 2 && z < 12) issues.warns.push("Zweischicht mit sehr kleiner Nutenzahl ist ungewöhnlich.");
       if (z % 3 !== 0) issues.warns.push("Z ist nicht durch 3 teilbar (bei 3-phasig oft unüblich).");
 
-      // Standardfall-Erkennung: q = Z/(3*poles)
       const info = windingClassInfo(z, poles);
       if (info.isInteger) {
-        issues.warns.push(`Standardfall ✅ (integral-slot): q = Z/(3·Polzahl) = ${z}/(${info.denom}) = ${info.q.toFixed(3)} → ganzzahlig (${Math.round(info.q)}). Automatik geeignet.`);
+        issues.warns.push(`Standardfall ✅: q = ${z}/(${info.denom}) = ${info.q.toFixed(3)} → ganzzahlig (${Math.round(info.q)}). Automatik geeignet.`);
       } else {
-        // das ist für unsere Real-Generierung ein Abbruchgrund
-        issues.errors.push(`Sonderfall ❌ (Bruchnut/Spezial): q = Z/(3·Polzahl) = ${z}/(${info.denom}) = ${info.q.toFixed(3)} → NICHT ganzzahlig. Automatik (Real) nicht sicher.`);
+        issues.errors.push(`Sonderfall ❌: q = ${z}/(${info.denom}) = ${info.q.toFixed(3)} → NICHT ganzzahlig. Real-Automatik nicht sicher.`);
       }
 
-      // Hinweis bei einschicht
       if (layers !== 2) issues.warns.push("Hinweis: Real-Generator ist für zweischicht optimiert. Einschicht kann abweichen.");
 
       return issues;
     }
 
     // ---------- REAL: Spulenliste berechnen (Standardfall) ----------
-    // Vereinfachtes, praxistaugliches Verfahren:
-    // - Z/2 Spulen
-    // - Startnut oben: s
-    // - Endnut unten: s+y
-    // - Phase+Vorzeichen über elektrischen Winkel der Nut (sin-basiert)
     function buildRealCoils(input) {
-      const { z, poles, y, layers } = input;
+      const { z, poles, y } = input;
 
-      // Real-Modus nur sicher für Standardfall integral-slot
       const info = windingClassInfo(z, poles);
       if (!info.isInteger) {
         throw new Error("Sonderfall: q nicht ganzzahlig – Real-Berechnung abgebrochen.");
-      }
-
-      // Für Real-Test: zweischicht erwartet (einschicht könnte später)
-      if (layers !== 2) {
-        // nicht abbrechen, aber das Ergebnis ist nur "Test"
-        // -> wir laufen trotzdem durch
       }
 
       const slotPitchElec = (180 * poles) / z; // Grad elektrisch pro Nut
@@ -688,7 +662,6 @@
         return best;
       }
 
-      // Gruppen: je Polband (180°elec) und Phase → 3*poles Gruppen
       function groupForSlot(slot, phaseName) {
         const theta = (slot - 1) * slotPitchElec;
         const poleBand = Math.floor(theta / 180) + 1; // 1..poles
@@ -714,12 +687,114 @@
           gruppe: groupForSlot(startNut, ph.phase)
         });
       }
-
       return coils;
     }
 
     function computeWindingPlan(input) {
       return { coils: buildRealCoils(input) };
+    }
+
+    // ---------- U1/U2 V1/V2 W1/W2 Ableitung ----------
+    // Regel:
+    // - sortiert je Phase nach gruppe, dann nr
+    // - bei sign "+" : start = startNut oben, end = endNut unten
+    // - bei sign "-" : start = endNut unten, end = startNut oben
+    function coilOrientation(c) {
+      if (c.sign === "+") {
+        return {
+          start: { nut: c.startNut, pos: "oben", tag: `Spule ${c.nr} (A)` },
+          end:   { nut: c.endNut,   pos: "unten", tag: `Spule ${c.nr} (B)` }
+        };
+      }
+      return {
+        start: { nut: c.endNut,   pos: "unten", tag: `Spule ${c.nr} (B)` },
+        end:   { nut: c.startNut, pos: "oben",  tag: `Spule ${c.nr} (A)` }
+      };
+    }
+
+    function buildTerminalEndpoints(coils) {
+      const phases = ["U","V","W"];
+      const map = {};
+      for (const ph of phases) {
+        const list = coils
+          .filter(c => c.phase === ph)
+          .slice()
+          .sort((a,b) => (a.gruppe - b.gruppe) || (a.nr - b.nr));
+
+        if (list.length === 0) { map[ph] = null; continue; }
+
+        const first = coilOrientation(list[0]).start;
+        const last  = coilOrientation(list[list.length - 1]).end;
+
+        // interconnect list (Ende -> Start) als Hilfe
+        const joins = [];
+        for (let i=0;i<list.length-1;i++){
+          const aEnd = coilOrientation(list[i]).end;
+          const bStart = coilOrientation(list[i+1]).start;
+          joins.push(`${ph}: ${aEnd.nut} ${aEnd.pos}  →  ${bStart.nut} ${bStart.pos}`);
+        }
+
+        map[ph] = {
+          start: first, end: last,
+          orderCount: list.length,
+          joins
+        };
+      }
+      return map;
+    }
+
+    function buildKlemmenText(input, coils) {
+      const ends = buildTerminalEndpoints(coils);
+      const conn = input.conn;
+      const terminals = String(input.terminals);
+
+      function fmtPoint(p){ return `Nut ${p.nut} ${p.pos}`; }
+
+      const lines = [];
+      lines.push(`Regel (App): pro Phase nach Gruppe/Spule sortiert; "+" => Start oben, "-" => Start unten.`);
+      lines.push("");
+
+      if (terminals === "3") {
+        lines.push(`Klemmenbild: 3 Klemmen (U/V/W)`);
+        lines.push(`Hinweis: Verschaltung meist intern fix (Stern oder Δ intern).`);
+        lines.push("");
+        lines.push(`U = ${ends.U ? fmtPoint(ends.U.start) : "—"}  …  ${ends.U ? fmtPoint(ends.U.end) : "—"}`);
+        lines.push(`V = ${ends.V ? fmtPoint(ends.V.start) : "—"}  …  ${ends.V ? fmtPoint(ends.V.end) : "—"}`);
+        lines.push(`W = ${ends.W ? fmtPoint(ends.W.start) : "—"}  …  ${ends.W ? fmtPoint(ends.W.end) : "—"}`);
+        return lines.join("\n");
+      }
+
+      // 6 Klemmen
+      lines.push(`Klemmenbild: 6 Klemmen (U1/V1/W1/U2/V2/W2)`);
+      lines.push("");
+      lines.push(`U1 = ${ends.U ? fmtPoint(ends.U.start) : "—"}`);
+      lines.push(`U2 = ${ends.U ? fmtPoint(ends.U.end)   : "—"}`);
+      lines.push(`V1 = ${ends.V ? fmtPoint(ends.V.start) : "—"}`);
+      lines.push(`V2 = ${ends.V ? fmtPoint(ends.V.end)   : "—"}`);
+      lines.push(`W1 = ${ends.W ? fmtPoint(ends.W.start) : "—"}`);
+      lines.push(`W2 = ${ends.W ? fmtPoint(ends.W.end)   : "—"}`);
+
+      lines.push("");
+      if (conn === "stern") {
+        lines.push(`Schaltung: Stern (Y)`);
+        lines.push(`Brücken: U2 + V2 + W2 zusammen (Sternpunkt)`);
+        lines.push(`Einspeisung: L1→U1, L2→V1, L3→W1`);
+      } else {
+        lines.push(`Schaltung: Dreieck (Δ)`);
+        lines.push(`Brücken: U1–W2, V1–U2, W1–V2`);
+        lines.push(`Einspeisung: an die drei Brückenpunkte (L1/L2/L3)`);
+      }
+
+      lines.push("");
+      lines.push(`Interne Serien-Verbindungen (Hilfe):`);
+      for (const ph of ["U","V","W"]) {
+        if (!ends[ph]) continue;
+        lines.push(`- Phase ${ph} (${ends[ph].orderCount} Spulen):`);
+        if (ends[ph].joins.length === 0) lines.push(`  (nur 1 Spule – keine Zwischenverbindung)`);
+        for (const j of ends[ph].joins) lines.push(`  ${j}`);
+      }
+
+      return lines.join("\n");
     }
 
     // ---------- Tabellen ----------
@@ -782,8 +857,8 @@
       for (const c of coils){
         const s = normalizeNut(c.startNut, z);
         const e = normalizeNut(c.endNut, z);
-        const tA = formatConductor(c,"A"); // Startseite
-        const tB = formatConductor(c,"B"); // Endseite
+        const tA = formatConductor(c,"A");
+        const tB = formatConductor(c,"B");
         if (topCount>0) placeInFirstFree(plan[s].top, tA);
         if (bottomCount>0) placeInFirstFree(plan[e].bottom, tB);
         else if (topCount>0) placeInFirstFree(plan[e].top, tB);
@@ -854,35 +929,7 @@
       return steps.join("\n");
     }
 
-    // ---------- Anschluss/Kopfblatt ----------
-    function buildTerminalPlanText(input){
-      const conn = input.conn, terminals = input.terminals;
-      if (terminals === 3){
-        return [
-          `Klemmenbild: 3 Klemmen (U/V/W)`,
-          `Schaltung: ${conn==="stern" ? "Stern (intern)" : "Dreieck (intern)"}`,
-          ``,
-          `Hinweis: Bei 3 Klemmen ist die Verschaltung meist intern fix (kein Umbrücken).`
-        ].join("\n");
-      }
-      if (conn === "stern"){
-        return [
-          `Klemmenbild: 6 Klemmen (U1/V1/W1/U2/V2/W2)`,
-          `Schaltung: Stern (Y)`,
-          ``,
-          `Brücken: U2 + V2 + W2 zusammen (Sternpunkt)`,
-          `Einspeisung: L1->U1, L2->V1, L3->W1`
-        ].join("\n");
-      }
-      return [
-        `Klemmenbild: 6 Klemmen (U1/V1/W1/U2/V2/W2)`,
-        `Schaltung: Dreieck (Δ)`,
-        ``,
-        `Brücken: U1–W2, V1–U2, W1–V2`,
-        `Einspeisung: an die drei Brückenpunkte (L1/L2/L3)`
-      ].join("\n");
-    }
-
+    // ---------- Nameplate ----------
     const NAMEPLATE_IDS = ["np_manu","np_type","np_serial","np_year","np_power","np_speed","np_voltage","np_current","np_freq","np_cosphi","np_eff","np_ip","np_ins","np_duty","np_amb","np_mount","np_more"];
     function readNameplate(){ const out={}; for(const id of NAMEPLATE_IDS) out[id]=safeStr($(id).value); return out; }
     function applyNameplate(npObj){ for (const id of NAMEPLATE_IDS) $(id).value = (npObj && (id in npObj)) ? (npObj[id] ?? "") : ""; }
@@ -912,7 +959,7 @@
       ].join("\n");
     }
 
-    // ---------- Ein-/Ausgabe ----------
+    // ---------- Input ----------
     function readInput(){
       const z = safeInt($("z").value, null);
       const poles = safeInt($("poles").value, 4);
@@ -937,6 +984,7 @@
       return { input:{ z,poles,layers,y,conn,terminals,layersPerSlot,workMode,turns,wire,notes }, problems };
     }
 
+    // ---------- JSON ----------
     function buildStateObject(){
       const { input } = readInput();
       return { version:1, timestamp:new Date().toISOString(), input:{...input}, nameplate: readNameplate() };
@@ -957,7 +1005,6 @@
       $("notes").value = i.notes ?? "";
       applyNameplate(state.nameplate || {});
     }
-
     function exportJsonToArea(){
       $("jsonArea").value = JSON.stringify(buildStateObject(), null, 2);
       setStatus("JSON erzeugt", "ok");
@@ -982,13 +1029,13 @@
       }
     }
 
+    // ---------- Demo ----------
     function buildDemoInput() {
-      return { z: 36, poles: 4, layers: 2, y: 9, conn: "stern", terminals: 6, layersPerSlot: 2, workMode: "slotwise", turns: 38, wire: "0,90mm", notes: "Blick Antriebsseite, Nut 1 oben." };
+      return { z: 36, poles: 4, layers: 2, y: 9, conn: "stern", terminals: 6, layersPerSlot: 2, workMode: "slotwise", turns: 38, wire: "0,90mm", notes: "Nut 1 oben markiert, Blick Antriebsseite." };
     }
     function buildDemoNameplate() {
       return { np_manu:"Beispiel", np_type:"IEC Motor", np_serial:"—", np_year:"—", np_power:"1,5", np_speed:"1420", np_voltage:"230/400", np_current:"5,2/3,0", np_freq:"50", np_cosphi:"0,82", np_eff:"IE2", np_ip:"IP55", np_ins:"F", np_duty:"S1", np_amb:"40°C", np_mount:"B3 / IM B3", np_more:"—" };
     }
-
     function applyDemo(){
       const d = buildDemoInput();
       $("z").value=d.z; $("poles").value=String(d.poles); $("layers").value=String(d.layers); $("y").value=d.y;
@@ -1050,7 +1097,9 @@
       renderFillPlanTable(input.z, fill);
       $("sequence").textContent = buildInsertSequence(input.z, fill, input.workMode);
 
-      $("terminalPlan").textContent = buildTerminalPlanText(input);
+      // <<< NEU: U1/U2 etc. >>>
+      $("terminalPlan").textContent = buildKlemmenText(input, plan.coils);
+
       $("headerSheet").textContent = buildHeaderSheetText(input);
 
       if (check.warns.length){
@@ -1062,6 +1111,7 @@
       }
     }
 
+    // Events
     $("btnDemo").addEventListener("click", applyDemo);
     $("btnCalc").addEventListener("click", calculateAndRender);
     $("btnPrint").addEventListener("click", () => window.print());
